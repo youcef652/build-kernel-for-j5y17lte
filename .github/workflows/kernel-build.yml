@@ -18,8 +18,9 @@ jobs:
 
     - name: Clone Kernel Source
       run: |
-        # يمكنك استبدال الرابط أدناه بمستودع مخصص لـ Exynos 7870 mainline إن وجد
+        # الرابط الصحيح لمستودع النواة المستقرة إصدار 6.6
         git clone --depth 1 --branch linux-6.6.y https://kernel.org kernel-src
+
 
     - name: Configure and Build Kernel
       run: |
