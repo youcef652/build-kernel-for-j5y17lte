@@ -1,1 +1,48 @@
+name: Build J5 Pro Mainline Kernel
+
+on:
+  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً بضغطة زر
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git build-essential libncurses-dev bison flex libssl-dev libelf-dev bc ncurses-dev gcc-aarch64-linux-gnu
+
+    - name: Clone Kernel Source
+      run: |
+        # يمكنك استبدال الرابط أدناه بمستودع مخصص لـ Exynos 7870 mainline إن وجد
+        git clone --depth 1 --branch linux-6.6.y https://kernel.org kernel-src
+
+    - name: Configure and Build Kernel
+      run: |
+        cd kernel-src
+        export ARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        
+        # استخدام إعدادات exynos الافتراضية
+        make defconfig exynos_defconfig
+        
+        # بدء البناء بكامل طاقة السيرفر
+        make -j$(nproc) Image.gz dtbs
+
+    - name: Prepare Artifacts for Download
+      run: |
+        mkdir output
+        # نسخ صورة النواة وملفات الـ DTB الناتجة إلى مجلد مخرج واحد
+        cp kernel-src/arch/arm64/boot/Image.gz output/
+        find kernel-src/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} output/ \;
+
+    - name: Upload Kernel Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: J5-Pro-Kernel-6.6
+        path: output/
 
