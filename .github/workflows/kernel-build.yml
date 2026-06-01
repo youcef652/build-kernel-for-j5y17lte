@@ -55,16 +55,12 @@ jobs:
         run: |
           mkdir android && cd android
           
-          # إعداد هوية الجيت لتجنب الأخطاء التفاعلية
+          # إعداد الهوية لمنع المشاكل التفاعلية
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git config --global color.ui false
           
-          # رفع سعة الاستقبال لمنع انقطاع التحميل
-          git config --global http.postBuffer 2097152000
-          git config --global https.postBuffer 2097152000
-          
-          # تهيئة سورس LineageOS 21 (Android 14) المستهدف
+          # تهيئة سورس LineageOS 21.0
           repo init -u https://github.com -b lineage-21.0 --depth=1 --git-lfs --no-repo-verify
           
           # إنشاء المانيفست المخصص لجهاز J5 2017 ومعالجه
@@ -79,26 +75,25 @@ jobs:
           </manifest>
           EOF
           
-          # المزامنة القسرية والذكية مع تخطي الأخطاء الجانبية
           echo "Starting Repo Sync..."
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune || true
           
-          # === الحل السحري لتخطي قفل الـ Repo والرمز 128 ===
-          echo "Resetting Git Config to bypass Repo locks..."
-          git config --global --unset url."https://github.com/".insteadOf || true
-          git config --global --unset-all url."https://github.com/".insteadOf || true
-          
-          # خطوة الطوارئ الاحترافية: الآن ستعمل بنجاح وبدون خطأ الـ 128
+          # === الحل العبقري: جلب المجلد الناقص كـ ZIP لتخطي الحظر والرمز 128 تماماً ===
           if [ ! -f build/envsetup.sh ]; then
-            echo "build/envsetup.sh is missing! Fetching android_build tree directly..."
+            echo "build/envsetup.sh is missing! Fetching android_build archive via curl..."
             rm -rf build
-            git clone --depth=1 https://github.com -b lineage-21.0 build
+            
+            # تحميل المجلد كاملاً بصيغة zip وفك ضغطه فوراً بدون استخدام Git
+            curl -L https://github.com -o build.zip
+            unzip -q build.zip
+            mv android_build-lineage-21.0 build
+            rm build.zip
           fi
           
-          # مسح الملفات المؤقتة لتأمين القرص الصلب قبل التجميع
+          # مسح ملفات التحميل المؤقتة لتأمين مساحة هارد السيرفر
           rm -rf .repo/project-objects .repo/projects/*/.git/objects/pack/tmp_*
           
-          # إطلاق عملية طبخ وتجميع الروم المخصص لجهازك J5 2017
+          # إطلاق عملية تجميع وطبخ الروم لجهازك
           echo "Starting Compilation Build..."
           export USE_CCACHE=1
           export CCACHE_DIR=~/.ccache
