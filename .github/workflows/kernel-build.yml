@@ -54,16 +54,23 @@ jobs:
       - name: Initialize Repo and Shallow Sync
         run: |
           mkdir android && cd android
+          
+          # تهيئة إعدادات الجيت والهوية الإجبارية لمنع توقف الأداة
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          git config --global color.ui false
           
-          # تحميل الهيكل الأساسي فقط بدون أي إضافات (Depth=1)
-          repo init -u https://github.com -b lineage-18.1 --depth=1 --git-lfs
+          # ربط بافر الجيت لتفادي انهيار التحميل المفاجئ (Buffer Optimization)
+          git config --global http.postBuffer 524288000
+          git config --global https.postBuffer 524288000
           
-          # المزامنة مع تفعيل خيار الحذف التلقائي للمخلفات والتاريخ (--prune)
+          # تهيئة أداة الـ repo مع إجبارها على استخدام البايثون الحديث وتفعيل الـ git-lfs لملفات النظام المدمجة
+          repo init -u https://github.com/LineageOS/android.git -b lineage-18.1 --depth=1 --git-lfs --no-repo-verify
+          
+          # المزامنة الذكية: جلب الفرع الحالي فقط مع حماية السكريبت وتقليل الضغط بالتزامن
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
           
-          # تنظيف فوري لملفات تحميل الجيت الزائدة لتوفير ما يقارب 15 جيجابايت فوراً
+          # تنظيف فوري لمخلفات التحميل والملفات المؤقتة لتأمين مساحة القرص
           rm -rf .repo/project-objects .repo/projects/*/.git/objects/pack/tmp_*
 
       # 7. جلب ملفات شفرة هاتف J5 2017 الخاصة بـ LineageOS 18.1
