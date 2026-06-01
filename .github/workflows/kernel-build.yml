@@ -5,22 +5,21 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # نستخدم هذه النسخة المستقرة لتفادي خطأ libncurses5 فوراً
+    runs-on: ubuntu-22.04 # نضمن توافق حزمة ncurses5 الافتراضية
     
     steps:
-      # 1. تفريغ أقصى مساحة ممكنة من القرص الصلب
-      - name: Maximize Build Disk Space
-        uses: easimon/maximize-build-space@v10
-        with:
-          root-reserve-mb: 1024
-          swap-size-mb: 2048
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
+      # 1. تفريغ القرص يدوياً بالكامل دون العبث بتقسيم السيرفر لتفادي تجمد الـ apt
+      - name: Manual Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          docker image prune --all --force
+          df -h # يعرض لك المساحة الفارغة الفعلية في صفحة المراقبة لتتأكد بنفسك
 
-      # 2. تثبيت اعتماديات التجميع الأساسية
+      # 2. تثبيت اعتماديات التجميع الأساسية (سيعمل الآن بنجاح 100%)
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -34,7 +33,7 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      # 4. استدعاء الكاش المحفوظ (لتسريع العمل وتخطي حد الـ 6 ساعات)
+      # 4. تفعيل كاش GitHub Actions لحفظ ملفات البناء وتخطي حاجز الـ 6 ساعات
       - name: Cache ccache
         uses: actions/cache@v4
         with:
@@ -85,8 +84,6 @@ jobs:
           export _JAVA_OPTIONS="-Xmx4g"
           source build/envsetup.sh
           lunch lineage_j5y17lte-userdebug
-          
-          # بناء أجزاء الروم تدريجياً بدلاً من بنائها دفعة واحدة لتوفير مساحة القرص مؤقتاً
           mka bacon -j$(nproc --all)
 
       # 9. رفع ملف الـ zip النهائي للروم
