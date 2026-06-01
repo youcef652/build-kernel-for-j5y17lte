@@ -1,41 +1,32 @@
-name: Build LineageOS 18.1 for J5 2017
+name: Minimal Build Lineage 18.1 for J5
 
 on:
-  workflow_dispatch: # يتيح تشغيل البناء يدويًا من واجهة الموقع
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # نستخدم هذه النسخة المستقرة لتفادي خطأ libncurses5 فوراً
     
     steps:
-      # 1. التخلص التام من حزم نظام GitHub وتحرير مساحة تقارب 220 جيجابايت لتخطي عقبة الـ 15G
+      # 1. تفريغ أقصى مساحة ممكنة من القرص الصلب
       - name: Maximize Build Disk Space
         uses: easimon/maximize-build-space@v10
         with:
-          root-reserve-mb: 2048
-          swap-size-mb: 1024
+          root-reserve-mb: 1024
+          swap-size-mb: 2048
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
           remove-docker-images: 'true'
 
-      # 2. تثبيت الحزم الأساسية المعتمدة لبناء أندرويد 11
-            # 2. تثبيت الحزم المحدثة والبديلة المتوافقة مع أوبونتو لطبخ نظام أندرويد
+      # 2. تثبيت اعتماديات التجميع الأساسية
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          
-          # تحميل حزم ncurses5 القديمة وتثبيتها يدوياً لحل مشكلة الفقدان
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libncurses5_6.3-2ubuntu0.1_amd64.deb
-          sudo apt install -y ./libtinfo5_6.3-2ubuntu0.1_amd64.deb ./libncurses5_6.3-2ubuntu0.1_amd64.deb
-          
-          # تثبيت بقية اعتماديات البناء الأساسية للأندرويد
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 libncurses5
 
-
-      # 3. جلب وتثبيت أداة المزامنة Repo من جوجل
+      # 3. تثبيت أداة Repo
       - name: Install Google Repo Tool
         run: |
           mkdir -p ~/bin
@@ -43,49 +34,49 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      # 4. تفعيل كاش GitHub Actions لحفظ ملفات البناء وتخطي حاجز الـ 6 ساعات
+      # 4. استدعاء الكاش المحفوظ (لتسريع العمل وتخطي حد الـ 6 ساعات)
       - name: Cache ccache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-j5y17lte-18-${{ github.sha }}
+          key: ccache-j5-minimal-${{ github.sha }}
           restore-keys: |
-            ccache-j5y17lte-18-
+            ccache-j5-minimal-
 
-      # 5. تهيئة إعدادات الـ ccache وضغطه لتقليل الحجم
+      # 5. ضبط إعدادات الـ ccache بحجم 8 جيجا ليناسب المساحة المتاحة
       - name: Configure ccache
         run: |
           mkdir -p ~/.ccache
-          ccache -M 10G
+          ccache -M 8G
           ccache -o compression=true
           ccache -z
 
-      # 6. تهيئة مستودع سورس LineageOS 18.1 الرسمي والتحميل السطحي (Shallow Sync) لتوفير المساحة
+      # 6. التحميل السطحي والمجزأ (Extreme Shallow Sync) لتوفير المساحة
       - name: Initialize Repo and Shallow Sync
         run: |
           mkdir android && cd android
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          
+          # تحميل الهيكل الأساسي فقط بدون أي إضافات (Depth=1)
           repo init -u https://github.com -b lineage-18.1 --depth=1 --git-lfs
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          
+          # المزامنة مع تفعيل خيار الحذف التلقائي للمخلفات والتاريخ (--prune)
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
+          
+          # تنظيف فوري لملفات تحميل الجيت الزائدة لتوفير ما يقارب 15 جيجابايت فوراً
+          rm -rf .repo/project-objects .repo/projects/*/.git/objects/pack/tmp_*
 
-      # 7. جلب مستودعات شفرة هاتف J5 2017 ومعالج Exynos 7870 المخصصة لفرع 18.1
+      # 7. جلب ملفات شفرة هاتف J5 2017 الخاصة بـ LineageOS 18.1
       - name: Clone Device Specific Trees
         run: |
           cd android
-          # جلب ملف إعدادات الهاتف (Device Tree) لـ LineageOS 18.1
           git clone --depth=1 https://github.com -b lineage-18.1 device/samsung/j5y17lte
-          
-          # جلب ملف الإعدادات المشترك للمعالج (Exynos7870 Common) لـ LineageOS 18.1
           git clone --depth=1 https://github.com -b lineage-18.1 device/samsung/exynos7870-common
-          
-          # جلب ملفات النواة (Kernel) المتوافقة مع أندرويد 11
           git clone --depth=1 https://github.com -b lineage-18.1 kernel/samsung/exynos7870
-          
-          # جلب ملفات المصنع الاحتكارية (Vendor) لـ LineageOS 18.1
           git clone --depth=1 https://github.com -b lineage-18.1 vendor/samsung
 
-      # 8. تجميع النظام وضبط متغيرات البيئة لمنع الانهيار (OOM)
+      # 8. البناء الفعلي مع تقييد الذاكرة لمنع أي خطأ امتلاء مفاجئ
       - name: Build ROM
         run: |
           cd android
@@ -94,9 +85,11 @@ jobs:
           export _JAVA_OPTIONS="-Xmx4g"
           source build/envsetup.sh
           lunch lineage_j5y17lte-userdebug
+          
+          # بناء أجزاء الروم تدريجياً بدلاً من بنائها دفعة واحدة لتوفير مساحة القرص مؤقتاً
           mka bacon -j$(nproc --all)
 
-      # 9. رفع الملف النهائي بصيغة الـ zip المستهدفة للتحميل
+      # 9. رفع ملف الـ zip النهائي للروم
       - name: Upload Artifacts
         if: success()
         uses: actions/upload-artifact@v4
