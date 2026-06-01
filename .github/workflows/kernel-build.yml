@@ -21,10 +21,12 @@ jobs:
           remove-docker-images: 'true'
 
       # 2. تثبيت الحزم الأساسية المعتمدة لبناء أندرويد 11
+            # 2. تثبيت الحزم المحدثة والبديلة المتوافقة مع أوبونتو لطبخ نظام أندرويد
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 libncurses5
+
 
       # 3. جلب وتثبيت أداة المزامنة Repo من جوجل
       - name: Install Google Repo Tool
