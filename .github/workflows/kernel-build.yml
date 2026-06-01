@@ -78,9 +78,16 @@ jobs:
       - name: Clone Device Specific Trees
         run: |
           cd android
+          # جلب ملف إعدادات الهاتف (Device Tree)
           git clone --depth=1 https://github.com -b lineage-18.1 device/samsung/j5y17lte
+          
+          # جلب ملف الإعدادات المشترك لعائلة المعالج (Exynos7870 Common)
           git clone --depth=1 https://github.com -b lineage-18.1 device/samsung/exynos7870-common
+          
+          # جلب ملف النواة (Kernel) المفتوح والمستقر للتجميع
           git clone --depth=1 https://github.com -b lineage-18.1 kernel/samsung/exynos7870
+          
+          # جلب ملفات المصنع الاحتكارية (Vendor Blobs) للمعالج والجهاز
           git clone --depth=1 https://github.com -b lineage-18.1 vendor/samsung
 
       # 8. البناء الفعلي مع تقييد الذاكرة لمنع أي خطأ امتلاء مفاجئ
