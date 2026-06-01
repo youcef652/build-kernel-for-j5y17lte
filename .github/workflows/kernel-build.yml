@@ -1,35 +1,34 @@
-name: Minimal Build Lineage 18.1 for J5
+name: Fixed Build Lineage 18.1 for J5 2017
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # نضمن توافق حزمة ncurses5 الافتراضية
+    runs-on: ubuntu-22.04 # نضمن وجود حزمة libncurses5 فوراً
     
     steps:
-      # 1. تفريغ القرص يدوياً بالكامل دون العبث بتقسيم السيرفر لتفادي تجمد الـ apt
+      # 1. تفريغ القرص يدوياً بالكامل لتفادي تجمد الـ apt وتأمين ~45 جيجابايت
       - name: Manual Free Disk Space
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/share/boost
-          docker image prune --all --force
-          df -h # يعرض لك المساحة الفارغة الفعلية في صفحة المراقبة لتتأكد بنفسك
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/local/share/boost || true
+          docker image prune --all --force || true
+          df -h
 
-      # 2. تثبيت اعتماديات التجميع الأساسية (سيعمل الآن بنجاح 100%)
+      # 2. تثبيت اعتماديات التجميع المحدثة
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 libncurses5
 
-      # 3. تثبيت أداة Repo
+      # 3. تثبيت أداة Repo من السورس المباشر الآمن لجوجل
       - name: Install Google Repo Tool
         run: |
           mkdir -p ~/bin
-          # استخدام الرابط المباشر المستقر التابع لـ gerrit.googlesource
           curl https://googlesource.com | base64 --decode > ~/bin/repo
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
@@ -39,9 +38,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-j5-minimal-${{ github.sha }}
+          key: ccache-j5-manifest-${{ github.sha }}
           restore-keys: |
-            ccache-j5-minimal-
+            ccache-j5-manifest-
 
       # 5. ضبط إعدادات الـ ccache بحجم 8 جيجا ليناسب المساحة المتاحة
       - name: Configure ccache
@@ -51,46 +50,40 @@ jobs:
           ccache -o compression=true
           ccache -z
 
-      # 6. التحميل السطحي والمجزأ (Extreme Shallow Sync) لتوفير المساحة
-      - name: Initialize Repo and Shallow Sync
+      # 6. تهيئة مستودع سورس LineageOS وإنشاء المانيفست المخصص لجهازك J5 2017
+      - name: Initialize Repo and Sync with Device Manifest
         run: |
           mkdir android && cd android
           
-          # تهيئة إعدادات الجيت والهوية الإجبارية لمنع توقف الأداة
+          # تهيئة إعدادات الهوية الإجبارية
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git config --global color.ui false
           
-          # ربط بافر الجيت لتفادي انهيار التحميل المفاجئ (Buffer Optimization)
-          git config --global http.postBuffer 524288000
-          git config --global https.postBuffer 524288000
-          
-          # تهيئة أداة الـ repo مع إجبارها على استخدام البايثون الحديث وتفعيل الـ git-lfs لملفات النظام المدمجة
+          # تهيئة السورس الأساسي لـ LineageOS 18.1 بأقل عمق لترك مساحة
           repo init -u https://github.com/LineageOS/android.git -b lineage-18.1 --depth=1 --git-lfs --no-repo-verify
           
-          # المزامنة الذكية: جلب الفرع الحالي فقط مع حماية السكريبت وتقليل الضغط بالتزامن
+          # إنشاء مجلد الـ local_manifests السحري
+          mkdir -p .repo/local_manifests
+          
+          # كتابة خريطة مستودعات هاتفك ومعالجك (Device, Common, Kernel, Vendor) لتجلبها الأداة ذاتياً تلقائياً
+          cat <<EOF > .repo/local_manifests/j5y17lte.xml
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+            <project name="SamsungGalaxyJ5-2017/android_device_samsung_j5y17lte" path="device/samsung/j5y17lte" remote="github" revision="lineage-18.1" depth="1" />
+            <project name="SamsungGalaxyJ5-2017/android_device_samsung_exynos7870-common" path="device/samsung/exynos7870-common" remote="github" revision="lineage-18.1" depth="1" />
+            <project name="SamsungGalaxyJ5-2017/FlareKernel_AOSP" path="kernel/samsung/exynos7870" remote="github" revision="lineage-18.1" depth="1" />
+            <project name="SamsungGalaxyJ5-2017/android_vendor_samsung" path="vendor/samsung" remote="github" revision="lineage-18.1" depth="1" />
+          </manifest>
+          EOF
+          
+          # إطلاق المزامنة الشاملة لتقوم أداة repo بجلب كل شيء معاً بدون خطأ الـ git clone
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
           
-          # تنظيف فوري لمخلفات التحميل والملفات المؤقتة لتأمين مساحة القرص
+          # تنظيف الملفات الزائدة فوراً لحماية قرص السيرفر من الامتلاء
           rm -rf .repo/project-objects .repo/projects/*/.git/objects/pack/tmp_*
 
-      # 7. جلب ملفات شفرة هاتف J5 2017 الخاصة بـ LineageOS 18.1
-      - name: Clone Device Specific Trees
-        run: |
-          cd android
-          # جلب ملف إعدادات الهاتف (Device Tree)
-          git clone --depth=1 https://github.com -b lineage-18.1 device/samsung/j5y17lte
-          
-          # جلب ملف الإعدادات المشترك لعائلة المعالج (Exynos7870 Common)
-          git clone --depth=1 https://github.com -b lineage-18.1 device/samsung/exynos7870-common
-          
-          # جلب ملف النواة (Kernel) المفتوح والمستقر للتجميع
-          git clone --depth=1 https://github.com -b lineage-18.1 kernel/samsung/exynos7870
-          
-          # جلب ملفات المصنع الاحتكارية (Vendor Blobs) للمعالج والجهاز
-          git clone --depth=1 https://github.com -b lineage-18.1 vendor/samsung
-
-      # 8. البناء الفعلي مع تقييد الذاكرة لمنع أي خطأ امتلاء مفاجئ
+      # 7. البناء الفعلي للروم بعد اكتمال جلب كافة الملفات بنجاح
       - name: Build ROM
         run: |
           cd android
@@ -101,7 +94,7 @@ jobs:
           lunch lineage_j5y17lte-userdebug
           mka bacon -j$(nproc --all)
 
-      # 9. رفع ملف الـ zip النهائي للروم
+      # 8. رفع الملف النهائي (.zip) لتنزيله فوراً
       - name: Upload Artifacts
         if: success()
         uses: actions/upload-artifact@v4
