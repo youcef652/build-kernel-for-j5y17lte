@@ -5,10 +5,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # نضمن التوافق التام للاعتماديات والـ libncurses5 الافتراضي
+    runs-on: ubuntu-22.04
     
     steps:
-      # 1. تنظيف عميق وعنيف يدوي للقرص لمنع تجمد الـ apt وتحرير مساحة كافية
+      # 1. تنظيف عميق وعنيف يدوي للقرص
       - name: Manual Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet || true
@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 libncurses5
 
-      # 3. تثبيت أداة Repo من سورس جوجل الخام لتفادي أخطاء الـ HTML
+      # 3. تثبيت أداة Repo من سورس جوجل الخام
       - name: Install Google Repo Tool
         run: |
           mkdir -p ~/bin
@@ -65,7 +65,7 @@ jobs:
           git config --global https.postBuffer 2097152000
           
           # تهيئة سورس LineageOS 21 (Android 14) المستهدف
-          repo init -u https://github.com/LineageOS/android.git -b lineage-21.0 --depth=1 --git-lfs --no-repo-verify
+          repo init -u https://github.com -b lineage-21.0 --depth=1 --git-lfs --no-repo-verify
           
           # إنشاء المانيفست المخصص لجهاز J5 2017 ومعالجه
           mkdir -p .repo/local_manifests
@@ -83,7 +83,12 @@ jobs:
           echo "Starting Repo Sync..."
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune || true
           
-          # خطوة الطوارئ الاحترافية: إذا لم يتم تحميل مجلد البناء الأساسي، سحبه يدوياً وقسرياً فوراً
+          # === الحل السحري لتخطي قفل الـ Repo والرمز 128 ===
+          echo "Resetting Git Config to bypass Repo locks..."
+          git config --global --unset url."https://github.com/".insteadOf || true
+          git config --global --unset-all url."https://github.com/".insteadOf || true
+          
+          # خطوة الطوارئ الاحترافية: الآن ستعمل بنجاح وبدون خطأ الـ 128
           if [ ! -f build/envsetup.sh ]; then
             echo "build/envsetup.sh is missing! Fetching android_build tree directly..."
             rm -rf build
